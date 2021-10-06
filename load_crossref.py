@@ -17,8 +17,8 @@ CROSSREF_ENDPOINT = 'https://api.crossref.org'
 CROSSREF_MAILTO = 'serg@msu.ru'
 CROSSREF_DIRSAVE = r'C:\Users\Ирина\Documents\Search (for medic)\JSON\ '
 
-
 logging.basicConfig(filename='doi_fetcher.log', level=logging.INFO)
+
 
 #ok
 def fetch_url(url, params=None, data=None):
@@ -160,7 +160,7 @@ def main():
 
         data = the_day_before_yesterday.strftime('%d-%m-%Y')
         newDirName = data
-        folder = os.makedirs(r'C:\Users\Ирина\Documents\Search (for medic)\JSON\ ' + newDirName, exist_ok=True)
+        folder = os.makedirs(CROSSREF_DIRSAVE + newDirName, exist_ok=True)
         #Скачевает все записи, начиная с даты start_date и заканчивая end_date
 
         fetcher.retrieve_new_dois(start_date=the_day_before_yesterday, end_date=the_day_before_yesterday)
