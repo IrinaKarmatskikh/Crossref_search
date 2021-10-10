@@ -13,6 +13,7 @@ import os
 import gzip
 import sqlite3
 from sqlite3 import Error
+import ast
 
 CROSSREF_ENDPOINT = 'https://api.crossref.org'
 CROSSREF_MAILTO = 'serg@msu.ru'
@@ -92,7 +93,7 @@ class CrossrefFetcher:
             return next_crossref_cursor
         return None
 #Ok
-    def retrieve_new_dois(self, start_date, end_date, initial_cursor='*'):
+    def retrieve_new_dois(self, start_date, end_date, connection, initial_cursor='*'):
         """
         Скачевает все записи, начиная с даты start_date и заканчивая end_date (включитльно).
         Значение initial_cursor может использоваться для возобновления закачки предыдущего запроса. (А, типа если не все закачи начать с того же места?)
@@ -117,8 +118,10 @@ class CrossrefFetcher:
             if not json_response:
                 break
             save = CrossrefSave()
-            save.save_items(json_response, i, start_date)
+            save.save_items(json_response, i, start_date, connection)
             i = i + 1
+            print("Success! 20 new files")
+            print("Success! 20 records added to the database")
             crossref_cursor = self.process_response_chunk(json_response)
             logging.info('Next cursor: %s', crossref_cursor)
 
@@ -134,17 +137,22 @@ class CrossrefFetcher:
 
 
 class CrossrefSave:
-    def save_items(self, json_response, number_dirs, start_date):
+    def save_items(self, json_response, number_dirs, start_date, connection):
         items = json_response.get('message', {}).get('items')
         data = start_date.strftime('%d-%m-%Y')
         dir_name = str(number_dirs)
         os.makedirs(CROSSREF_DIRSAVE + data + r'\ ' + dir_name, exist_ok = True)
+        data_base = Database()
+
         if items:
             for i in range(len(items)):
                 i_str = str(i)
                 full_dir_name = CROSSREF_DIRSAVE + data + r'\ ' + dir_name + r'\ ' + i_str + r'.json.gz'
                 with gzip.GzipFile(full_dir_name, 'w') as outfile:
                     outfile.write(json.dumps(items[i]).encode('utf-8'))
+                #connection = data_base.create_connection(DATABASE_DIRSAVE)
+                data_base.insert_record(items[i], full_dir_name, connection)
+
 
 class Database:
 
@@ -153,8 +161,10 @@ class Database:
         try:
             connection = sqlite3.connect(path)
             print("Connection to SQLite DB successful")
+            logging.info('Connection to SQLite DB successful')
         except Error as e:
             print(f"The error '{e}' occurred")
+            logging.info(f"The error '{e}' occurred")
         return connection
 
     def execute_query(self, connection, query):
@@ -162,28 +172,48 @@ class Database:
         try:
             cursor.execute(query)
             connection.commit()
-            print("Query executed successfully")
+        except Error as e:
+            logging.info(f"The error '{e}' occurred")
+
+    def execute_read_query(self,connection, query):
+        cursor = connection.cursor()
+        result = None
+        try:
+            cursor.execute(query)
+            result = cursor.fetchall()
+            return result
         except Error as e:
             print(f"The error '{e}' occurred")
 
-    def create_table(self):
-        connection = self.create_connection(DATABASE_DIRSAVE)
+    def count_records(self, connection, table_name):
+        query = """SELECT
+         Count(*)
+         FROM """ + table_name
+        result = self.execute_read_query(connection, query)
+        #print (result, table_name)
+        return result
+
+    def create_table(self, connection):
         create_pragma = """
-        PRAGMA foreign_keys = on;
+         PRAGMA foreign_keys = on;
         """
+
         create_article_table = """
         CREATE TABLE IF NOT EXISTS article(
          id INTEGER PRIMARY KEY AUTOINCREMENT,
-         doi INTEGER,
+         doi TEXT NOT NULL,
          title TEXT NOT NULL,
-         data TEXT 
-         address TEXT
+         data TEXT,
+         address TEXT,
+         UNIQUE(id, doi, title, data, address)
         );
         """
-        create_auth_table = """ 
+
+        create_auth_table = """
         CREATE TABLE IF NOT EXISTS auth(
-         id INTEGER PRIMARY KEY AUTOINCREMENT,
-         name TEXT NOT NULL
+         id INTEGER PRIMARY KEY  AUTOINCREMENT,
+         name TEXT NOT NULL,
+         UNIQUE(id, name)
         );
         """
 
@@ -191,15 +221,84 @@ class Database:
         CREATE TABLE IF NOT EXISTS auth_article (
          auth_id INTEGER NOT NULL,
          article_id INTEGER NOT NULL,
-         FOREIGN KEY (auth_id) REFERENCES auth(id)
+         FOREIGN KEY (auth_id) REFERENCES auth(id),
          FOREIGN KEY (article_id) REFERENCES article(id)
         );
         """
+
         self.execute_query(connection, create_pragma)
         self.execute_query(connection, create_article_table)
         self.execute_query(connection, create_auth_table)
         self.execute_query(connection, create_auth_article_table)
 
+        print("Database successfully created")
+        logging.info('Database successfully created')
+
+    def insert_record(self, item, address, connection):
+        try:
+            doi_it = item.get('DOI')
+            title_it = item.get('title')
+            dat_it = item.get('indexed').get('date-time')
+            doi, title, dat = "", "", ""
+            if doi_it != None and title_it != None and dat_it != None:
+                doi = str(doi_it).replace("'", "''")
+                title = str(title_it[0]).replace("'", "''")
+                dat = str(dat_it).replace("'", "''")
+
+                cursor = connection.cursor()
+                cursor.execute("select * from article where doi =?", (doi,))
+                result = cursor.fetchall()
+                if len(result) == 0:
+                    insert_article = """ 
+                    INSERT OR IGNORE INTO
+                    article(doi, title, data, address)
+                    VALUES 
+                    ('""" + doi + """', '""" + title + """', '""" + dat + """', '""" + address + """');
+                    """
+                    self.execute_query(connection, insert_article)
+                    logging.info('Title, DOI, data successfully inserted. Total records in article now %s', self.count_records(connection, "article"))
+
+                it = item.get('author')
+                if it != None:
+                    for j in range(len(item.get('author'))):
+                        auth = item.get('author')[j].get('family')
+
+                        cursor = connection.cursor()
+                        cursor.execute("select * from auth where name =?", (auth,))
+                        result = cursor.fetchall()
+
+                        if len(result) == 0:
+                            insert_auth = """
+                            INSERT OR REPLACE INTO auth (name)
+                            VALUES ('""" + str(auth) + """');
+                            """
+                            self.execute_query(connection, insert_auth)
+
+                        logging.info('List of authors successfully inserted. Total records in authors now %s',
+                                     self.count_records(connection, "auth"))
+
+                        cursor = connection.cursor()
+                        cursor.execute("select * from auth where name =?", (auth,))
+                        result = cursor.fetchall()
+                        id_auth, id_art = "", ""
+                        for row in result:
+                            id_auth = str(row[0])
+
+                        cursor.execute("select * from article where doi = ?", (doi,))
+                        result = cursor.fetchall()
+                        for row in result:
+                            id_art = str(row[0])
+
+                        insert_auth_article = """
+                         INSERT OR IGNORE INTO auth_article (auth_id, article_id)
+                         VALUES (' """ + id_auth + """ ', '""" + id_art + """' );
+                         """
+                        self.execute_query(connection, insert_auth_article)
+                        logging.info("id_auth , id_art successfully inserted in auth_art")
+
+        except Error as e:
+            print(f"The error in insert :'{e}' file", address)
+            logging.info(f"The error in insert :'{e}' file", address)
 
 def main():
     """Загрузка за предыдущие сутки."""
@@ -210,7 +309,8 @@ def main():
     # создаем элемент класса CrossrefFetcher
     fetcher = CrossrefFetcher()
     database = Database()
-    database.create_table()
+    connection = database.create_connection(DATABASE_DIRSAVE)
+    database.create_table(connection)
     for delay in range(number_of_days_to_fetch, 0, -1):
         yesterday = today - timedelta(delay)
         the_day_before_yesterday = yesterday - timedelta(1)
@@ -221,13 +321,10 @@ def main():
         folder = os.makedirs(r'C:\Users\Ирина\Documents\Search (for medic)\JSON\ ' + newDirName, exist_ok=True)
         #Скачевает все записи, начиная с даты start_date и заканчивая end_date
 
-        fetcher.retrieve_new_dois(start_date=the_day_before_yesterday, end_date=the_day_before_yesterday)
-        #Все успешно
+        fetcher.retrieve_new_dois(start_date=the_day_before_yesterday, end_date=the_day_before_yesterday, connection=connection)
+        #Все
         logging.info('Done!')
     print("Done!")
-
-
-
 
 main()
 exit(0)
