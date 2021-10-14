@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.error
 import json
 from datetime import date, timedelta
+import datetime
 import time
 import logging
 import os
@@ -111,6 +112,10 @@ class CrossrefFetcher:
         #откуда загружаем
         url = '{base}/works'.format(base=CROSSREF_ENDPOINT)
         i = 0
+        datab = Database()
+        mess = "Ура, наш скрипт запустили!"
+        now = datetime.datetime.now()
+        datab.save_inf(connection, mess, now, start_date, i)
         while crossref_cursor is not None:
             #записываем курсор в словарь
             post_params['cursor'] = crossref_cursor
@@ -124,6 +129,11 @@ class CrossrefFetcher:
             print("Success! 20 records added to the database")
             crossref_cursor = self.process_response_chunk(json_response)
             logging.info('Next cursor: %s', crossref_cursor)
+
+        now = datetime.datetime.now()
+        mess = "Ура, наш скрипт закончил загрузку!"
+        datab.save_inf(connection, mess, now, start_date, i)
+
 
     def replay_cached_responses(self):
         """Отладочная функция для загрузки ранее скаченных файлов."""
@@ -150,7 +160,6 @@ class CrossrefSave:
                 full_dir_name = CROSSREF_DIRSAVE + data + r'\ ' + dir_name + r'\ ' + i_str + r'.json.gz'
                 with gzip.GzipFile(full_dir_name, 'w') as outfile:
                     outfile.write(json.dumps(items[i]).encode('utf-8'))
-                #connection = data_base.create_connection(DATABASE_DIRSAVE)
                 data_base.insert_record(items[i], full_dir_name, connection)
 
 
@@ -174,6 +183,12 @@ class Database:
             connection.commit()
         except Error as e:
             logging.info(f"The error '{e}' occurred")
+
+    def save_inf(self, connection, mess, now_date, start_date, count):
+        cursor = connection.cursor()
+        cursor.execute("""INSERT INTO
+                                information(message, date_now, art_date, total_records)
+                                 VALUES ( ?, ?, ?, ? );""", (mess, now_date, start_date, count * 20,))
 
     def execute_read_query(self,connection, query):
         cursor = connection.cursor()
@@ -226,10 +241,21 @@ class Database:
         );
         """
 
+        create_inform_table = """
+        CREATE TABLE IF NOT EXISTS information (
+         inf_id INTEGER PRIMARY KEY  AUTOINCREMENT,
+         message TEXT,
+         date_now DATE NOT NULL,
+         art_date DATE NOT NULL,
+         total_records INTEGER
+        );
+        """
+
         self.execute_query(connection, create_pragma)
         self.execute_query(connection, create_article_table)
         self.execute_query(connection, create_auth_table)
         self.execute_query(connection, create_auth_article_table)
+        self.execute_query(connection, create_inform_table)
 
         print("Database successfully created")
         logging.info('Database successfully created')
