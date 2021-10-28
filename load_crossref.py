@@ -7,13 +7,13 @@ import urllib.parse
 import urllib.error
 import json
 from datetime import date, timedelta
-import datetime
 import time
 import logging
 import os
 import gzip
 import sqlite3
 from sqlite3 import Error
+import datetime
 import ast
 
 CROSSREF_ENDPOINT = 'https://api.crossref.org'
@@ -21,10 +21,7 @@ CROSSREF_MAILTO = 'serg@msu.ru'
 CROSSREF_DIRSAVE = r'C:\Users\Ирина\Documents\Search (for medic)\JSON\ '
 DATABASE_DIRSAVE = r'C:\Users\Ирина\Documents\Search (for medic)\DATABASE\db_python_app.sqlite'
 
-logging.basicConfig(filename='doi_fetcher.log', level=logging.INFO)
 
-
-#ok
 def fetch_url(url, params=None, data=None):
     """
     Загрузка JSON по указанному адресу URL.
@@ -32,7 +29,7 @@ def fetch_url(url, params=None, data=None):
     Выполняет обращение к адресу URL с параметрами PARAMS. Параметры PARAMS кодируются в адрксной строке.
     Если DATA не задано, то выполняется GET-запрос. Иначе словарь DATA передается в POST-запросе
     в формате JSON. Возвращает полученный JSON-ответ в виде словаря, либо None, если не удалось
-    загрузить данные. 
+    загрузить данные.
 
     :param url: Базовый адрес ресурса, без закодированных параметров.
     :type url: str
@@ -45,13 +42,13 @@ def fetch_url(url, params=None, data=None):
     """
     actual_url, post_data = url, None
     if params:
-        #строка представляющая ряд пар key=value, разделенных символами '&'.
+        # строка представляющая ряд пар key=value, разделенных символами '&'.
         post_args = urllib.parse.urlencode(params)
         # полный адрес откуда мы скачаем
         actual_url = '{base}?{params}'.format(base=url, params=post_args)
-    if data:#??
+    if data:
         post_data = json.dumps(data).encode('utf-8')
-    #This class is an abstraction of a URL request.
+    # This class is an abstraction of a URL request.
     request = urllib.request.Request(actual_url, headers={"Accept" : "application/json"}, data=post_data)
     if data:
         request.add_header('Content-Type', 'application/json; charset=utf-8')
@@ -93,7 +90,7 @@ class CrossrefFetcher:
             next_crossref_cursor = data['message'].get('next-cursor')
             return next_crossref_cursor
         return None
-#Ok
+
     def retrieve_new_dois(self, start_date, end_date, connection, initial_cursor='*'):
         """
         Скачевает все записи, начиная с даты start_date и заканчивая end_date (включитльно).
@@ -109,7 +106,7 @@ class CrossrefFetcher:
             'cursor': crossref_cursor
             }
 
-        #откуда загружаем
+        # откуда загружаем
         url = '{base}/works'.format(base=CROSSREF_ENDPOINT)
         i = 0
         datab = Database()
@@ -117,7 +114,7 @@ class CrossrefFetcher:
         now = datetime.datetime.now()
         datab.save_inf(connection, mess, now, start_date, i)
         while crossref_cursor is not None:
-            #записываем курсор в словарь
+            # записываем курсор в словарь
             post_params['cursor'] = crossref_cursor
             json_response = fetch_url(url, post_params)
             if not json_response:
@@ -129,11 +126,9 @@ class CrossrefFetcher:
             print("Success! 20 records added to the database")
             crossref_cursor = self.process_response_chunk(json_response)
             logging.info('Next cursor: %s', crossref_cursor)
-
         now = datetime.datetime.now()
         mess = "Ура, наш скрипт закончил загрузку!"
         datab.save_inf(connection, mess, now, start_date, i)
-
 
     def replay_cached_responses(self):
         """Отладочная функция для загрузки ранее скаченных файлов."""
@@ -160,6 +155,7 @@ class CrossrefSave:
                 full_dir_name = CROSSREF_DIRSAVE + data + r'\ ' + dir_name + r'\ ' + i_str + r'.json.gz'
                 with gzip.GzipFile(full_dir_name, 'w') as outfile:
                     outfile.write(json.dumps(items[i]).encode('utf-8'))
+                # connection = data_base.create_connection(DATABASE_DIRSAVE)
                 data_base.insert_record(items[i], full_dir_name, connection)
 
 
@@ -182,31 +178,26 @@ class Database:
             cursor.execute(query)
             connection.commit()
         except Error as e:
-            logging.info(f"The error '{e}' occurred")
+            logging.info(f"1The error '{e}' occurred, '{query}'")
 
     def save_inf(self, connection, mess, now_date, start_date, count):
         cursor = connection.cursor()
         cursor.execute("""INSERT INTO
-                                information(message, date_now, art_date, total_records)
-                                 VALUES ( ?, ?, ?, ? );""", (mess, now_date, start_date, count * 20,))
+                                  information(message, date_now, art_date, total_records)
+                                   VALUES ( ?, ?, ?, ? );""", (mess, now_date, start_date, count * 20,))
 
-    def execute_read_query(self,connection, query):
+    def count_records(self, connection, table_name):
         cursor = connection.cursor()
         result = None
         try:
+            query = """SELECT
+                     Count(*)
+                     FROM """ + table_name
             cursor.execute(query)
             result = cursor.fetchall()
             return result
         except Error as e:
-            print(f"The error '{e}' occurred")
-
-    def count_records(self, connection, table_name):
-        query = """SELECT
-         Count(*)
-         FROM """ + table_name
-        result = self.execute_read_query(connection, query)
-        #print (result, table_name)
-        return result
+            print(f"2The error '{e}' occurred")
 
     def create_table(self, connection):
         create_pragma = """
@@ -218,25 +209,25 @@ class Database:
          id INTEGER PRIMARY KEY AUTOINCREMENT,
          doi TEXT NOT NULL,
          title TEXT NOT NULL,
-         data TEXT,
-         address TEXT,
-         UNIQUE(id, doi, title, data, address)
+         issn TEXT,
+         date DATE,
+         address TEXT
         );
         """
 
-        create_auth_table = """
-        CREATE TABLE IF NOT EXISTS auth(
-         id INTEGER PRIMARY KEY  AUTOINCREMENT,
-         name TEXT NOT NULL,
-         UNIQUE(id, name)
+        create_author_table = """
+        CREATE TABLE IF NOT EXISTS author(
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+         name TEXT,
+         surname TEXT NOT NULL
         );
         """
 
-        create_auth_article_table = """ 
+        create_author_article_table = """ 
         CREATE TABLE IF NOT EXISTS auth_article (
          auth_id INTEGER NOT NULL,
          article_id INTEGER NOT NULL,
-         FOREIGN KEY (auth_id) REFERENCES auth(id),
+         FOREIGN KEY (auth_id) REFERENCES author(id),
          FOREIGN KEY (article_id) REFERENCES article(id)
         );
         """
@@ -248,13 +239,12 @@ class Database:
          date_now DATE NOT NULL,
          art_date DATE NOT NULL,
          total_records INTEGER
-        );
-        """
+        ); """
 
         self.execute_query(connection, create_pragma)
         self.execute_query(connection, create_article_table)
-        self.execute_query(connection, create_auth_table)
-        self.execute_query(connection, create_auth_article_table)
+        self.execute_query(connection, create_author_table)
+        self.execute_query(connection, create_author_article_table)
         self.execute_query(connection, create_inform_table)
 
         print("Database successfully created")
@@ -265,70 +255,74 @@ class Database:
             doi_it = item.get('DOI')
             title_it = item.get('title')
             dat_it = item.get('indexed').get('date-time')
+            issn_it = item.get('ISSN')
             doi, title, dat = "", "", ""
-            if doi_it != None and title_it != None and dat_it != None:
-                doi = str(doi_it).replace("'", "''")
-                title = str(title_it[0]).replace("'", "''")
-                dat = str(dat_it).replace("'", "''")
+            if doi_it != None and title_it != None:
+                doi = str(doi_it)
+                title = str(title_it[0])
+                dat = str(dat_it)
+                issn = str(issn_it)
 
                 cursor = connection.cursor()
-                cursor.execute("select * from article where doi =?", (doi,))
+                cursor.execute("SELECT id FROM article WHERE doi =?", (doi,))
                 result = cursor.fetchall()
                 if len(result) == 0:
-                    insert_article = """ 
-                    INSERT OR IGNORE INTO
-                    article(doi, title, data, address)
-                    VALUES 
-                    ('""" + doi + """', '""" + title + """', '""" + dat + """', '""" + address + """');
-                    """
-                    self.execute_query(connection, insert_article)
-                    logging.info('Title, DOI, data successfully inserted. Total records in article now %s', self.count_records(connection, "article"))
+                    cursor.execute("""INSERT OR IGNORE INTO 
+                     article(doi, title, issn, date, address) 
+                      VALUES ( ?, ?, ?, ?, ? );""",
+                                   (doi, title, issn, dat, address,))
+
+                    logging.info('Title, DOI, issn, date, address successfully inserted. '
+                                 'Total records in article now %s',
+                                 self.count_records(connection, "article"))
 
                 it = item.get('author')
                 if it != None:
                     for j in range(len(item.get('author'))):
-                        auth = item.get('author')[j].get('family')
-
+                        auth_name = item.get('author')[j].get('given')
+                        auth_surname = item.get('author')[j].get('family')
                         cursor = connection.cursor()
-                        cursor.execute("select * from auth where name =?", (auth,))
+                        cursor.execute("SELECT id FROM author WHERE surname =? AND name = ?", (auth_surname, auth_name))
                         result = cursor.fetchall()
-
                         if len(result) == 0:
-                            insert_auth = """
-                            INSERT OR REPLACE INTO auth (name)
-                            VALUES ('""" + str(auth) + """');
-                            """
-                            self.execute_query(connection, insert_auth)
+                            cursor.execute("""INSERT OR IGNORE INTO
+                                                author(name, surname)
+                                                VALUES ( ?, ?);""", (auth_name, auth_surname,))
 
                         logging.info('List of authors successfully inserted. Total records in authors now %s',
-                                     self.count_records(connection, "auth"))
+                                     self.count_records(connection, "author"))
 
-                        cursor = connection.cursor()
-                        cursor.execute("select * from auth where name =?", (auth,))
-                        result = cursor.fetchall()
                         id_auth, id_art = "", ""
+                        cursor = connection.cursor()
+                        cursor.execute("SELECT * FROM author WHERE name =? AND surname =?", (auth_name, auth_surname,))
+                        result = cursor.fetchall()
+
                         for row in result:
                             id_auth = str(row[0])
+                        len_auth = len(result)
 
-                        cursor.execute("select * from article where doi = ?", (doi,))
+                        cursor.execute("SELECT * FROM article where doi = ?", (doi,))
                         result = cursor.fetchall()
+
                         for row in result:
                             id_art = str(row[0])
+                        len_art = len(result)
 
-                        insert_auth_article = """
-                         INSERT OR IGNORE INTO auth_article (auth_id, article_id)
-                         VALUES (' """ + id_auth + """ ', '""" + id_art + """' );
-                         """
-                        self.execute_query(connection, insert_auth_article)
-                        logging.info("id_auth , id_art successfully inserted in auth_art")
+                        if len_auth != 0 and len_art != 0:
+                            cursor.execute("""
+                                INSERT OR IGNORE INTO auth_article (auth_id, article_id)
+                                VALUES (?, ? );""", (id_auth, id_art,))
+                            logging.info("id_auth , id_art successfully inserted in auth_art")
 
         except Error as e:
             print(f"The error in insert :'{e}' file", address)
             logging.info(f"The error in insert :'{e}' file", address)
 
+
 def main():
     """Загрузка за предыдущие сутки."""
     # количество дней для загрузки
+    logging.basicConfig(filename='doi_fetcher.log', level=logging.INFO)
     number_of_days_to_fetch = 1
     # объект datetime из текущей даты и времени
     today = date.today()
@@ -343,20 +337,26 @@ def main():
         logging.info('Fetching DOIs for %s...', the_day_before_yesterday)
 
         data = the_day_before_yesterday.strftime('%d-%m-%Y')
-        newDirName = data
-        folder = os.makedirs(r'C:\Users\Ирина\Documents\Search (for medic)\JSON\ ' + newDirName, exist_ok=True)
-        #Скачевает все записи, начиная с даты start_date и заканчивая end_date
+        new_dir_name = data
+        os.makedirs(r'C:\Users\Ирина\Documents\Search (for medic)\JSON\ ' + new_dir_name, exist_ok=True)
+        # Скачевает все записи, начиная с даты start_date и заканчивая end_date
 
-        fetcher.retrieve_new_dois(start_date=the_day_before_yesterday, end_date=the_day_before_yesterday, connection=connection)
-        #Все
+        fetcher.retrieve_new_dois(start_date=the_day_before_yesterday,
+                                  end_date=the_day_before_yesterday, connection=connection)
+        # Все
         logging.info('Done!')
     print("Done!")
+    fetcher = CrossrefFetcher()
+    fetcher.replay_cached_responses()
+    exit(0)
 
-main()
-exit(0)
+
+if __name__ == "__main__":
+    main()
+    exit(0)
+
+print("Fff")
 
 # Debug
-fetcher = CrossrefFetcher()
-fetcher.replay_cached_responses()
-exit(0) 
+
 

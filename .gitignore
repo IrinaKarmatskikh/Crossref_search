@@ -7,3 +7,11 @@ doi_fetcher.log
 DATABASE/db_python_app.sqlite-journal
 doi_fetcher.log
 DATABASE/db_python_app.sqlite
+__pycache__/load_crossref.cpython-38.pyc
+.idea/misc.xml
+.idea/misc.xml
+*.xml
+doi_fetcher.log
+r
+serv.py
+server.py
