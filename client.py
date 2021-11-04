@@ -12,7 +12,7 @@ DATA = {
     "issn"  : "some_issn",
     "date_start"  : "some_date_st",
     "cl_words"      : ["word1", "word2"],
-    "authtors"      : "some_date_st",
+    "authors"      : ["some_family"],
 }
 
 # R = requests.request("POST", URL_PATH, data=payload, headers=HEADERS)  # suggested by Postman
