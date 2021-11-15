@@ -19,7 +19,7 @@ import ast
 CROSSREF_ENDPOINT = 'https://api.crossref.org'
 CROSSREF_MAILTO = 'serg@msu.ru'
 CROSSREF_DIRSAVE = r'C:\Users\Ирина\Documents\Search (for medic)\JSON\ '
-DATABASE_DIRSAVE = r'C:\Users\Ирина\Documents\Search (for medic)\DATABASE\db_python_app.sqlite'
+DATABASE_DIRSAVE = r'C:\Users\Ирина\Documents\Search (for medic)\DATABASE\db_python_app.db'
 
 
 def fetch_url(url, params=None, data=None):
@@ -185,6 +185,7 @@ class Database:
         cursor.execute("""INSERT INTO
                                   information(message, date_now, art_date, total_records)
                                    VALUES ( ?, ?, ?, ? );""", (mess, now_date, start_date, count * 20,))
+        connection.commit()
 
     def count_records(self, connection, table_name):
         cursor = connection.cursor()
@@ -271,7 +272,8 @@ class Database:
                      article(doi, title, issn, date, address) 
                       VALUES ( ?, ?, ?, ?, ? );""",
                                    (doi, title, issn, dat, address,))
-
+                    connection.commit()
+                    print(title, "HEEY")
                     logging.info('Title, DOI, issn, date, address successfully inserted. '
                                  'Total records in article now %s',
                                  self.count_records(connection, "article"))
@@ -288,7 +290,7 @@ class Database:
                             cursor.execute("""INSERT OR IGNORE INTO
                                                 author(name, surname)
                                                 VALUES ( ?, ?);""", (auth_name, auth_surname,))
-
+                            connection.commit()
                         logging.info('List of authors successfully inserted. Total records in authors now %s',
                                      self.count_records(connection, "author"))
 
@@ -312,6 +314,7 @@ class Database:
                             cursor.execute("""
                                 INSERT OR IGNORE INTO auth_article (auth_id, article_id)
                                 VALUES (?, ? );""", (id_auth, id_art,))
+                            connection.commit()
                             logging.info("id_auth , id_art successfully inserted in auth_art")
 
         except Error as e:

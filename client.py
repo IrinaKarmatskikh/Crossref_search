@@ -9,16 +9,17 @@ HEADERS = {
 }
 
 DATA = {
-    "issn"  : "some_issn",
+    "doi"  : "some_doi",
     "date_start"  : "some_date_st",
-    "cl_words"      : ["word1", "word2"],
-    "authors"      : ["some_family"],
+    "cl_words"      : ["and"],
+    "authors"      : ["Wang"],
 }
 
 # R = requests.request("POST", URL_PATH, data=payload, headers=HEADERS)  # suggested by Postman
 R = requests.post(URL_PATH, json=json.dumps(DATA))
 
 if R.ok:
-    print("JSON: ", R.content)
+
+    print("Result: ", R.content)
 else:
     R.raise_for_status()
