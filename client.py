@@ -3,7 +3,7 @@ from io import BytesIO
 import json
 import requests
 
-URL_PATH = "http://127.0.0.1:3000/get-info"
+URL_PATH = "http://127.0.0.1:5000/get-info"
 HEADERS = {
     'Content-Type': 'application/json'
 }
