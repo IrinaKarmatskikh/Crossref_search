@@ -220,7 +220,8 @@ class Database:
         CREATE TABLE IF NOT EXISTS author(
          id INTEGER PRIMARY KEY AUTOINCREMENT,
          name TEXT,
-         surname TEXT NOT NULL
+         surname TEXT NOT NULL,
+         full_name TEXT NOT NULL
         );
         """
 
@@ -273,7 +274,7 @@ class Database:
                       VALUES ( ?, ?, ?, ?, ? );""",
                                    (doi, title, issn, dat, address,))
                     connection.commit()
-                    print(title, "HEEY")
+                    # print(title, "HEEY")
                     logging.info('Title, DOI, issn, date, address successfully inserted. '
                                  'Total records in article now %s',
                                  self.count_records(connection, "article"))
@@ -283,15 +284,19 @@ class Database:
                     for j in range(len(item.get('author'))):
                         auth_name = item.get('author')[j].get('given')
                         auth_surname = item.get('author')[j].get('family')
-                        cursor = connection.cursor()
-                        cursor.execute("SELECT id FROM author WHERE surname =? AND name = ?", (auth_surname, auth_name))
-                        result = cursor.fetchall()
-                        if len(result) == 0:
-                            cursor.execute("""INSERT OR IGNORE INTO
-                                                author(name, surname)
-                                                VALUES ( ?, ?);""", (auth_name, auth_surname,))
-                            connection.commit()
-                        logging.info('List of authors successfully inserted. Total records in authors now %s',
+                        if auth_surname != None:
+                            if auth_name != None:
+                                auth_full = auth_name + " " + auth_surname
+                            cursor = connection.cursor()
+                            cursor.execute("SELECT id FROM author WHERE surname =? AND name = ?",
+                                           (auth_surname, auth_name))
+                            result = cursor.fetchall()
+                            if len(result) == 0:
+                                cursor.execute("""INSERT OR IGNORE INTO
+                                                    author(name, surname, full_name)
+                                                    VALUES ( ?, ?, ?);""", (auth_name, auth_surname, auth_full,))
+                                connection.commit()
+                            logging.info('List of authors successfully inserted. Total records in authors now %s',
                                      self.count_records(connection, "author"))
 
                         id_auth, id_art = "", ""

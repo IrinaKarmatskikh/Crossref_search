@@ -20,47 +20,93 @@ def search():
     request_data = request.get_json()
     request_data = ast.literal_eval(request_data)
 
-    if len(request_data.get('cl_words')) > 0:
-        cl_word = []
-        param_words_in_art = "article.title LIKE '%' || ? || '%'"
-        cl_word.append(request_data.get('cl_words')[0])
+    param_words_in_art = ""
+    date_str = ""
+    param_authors = ""
+    cl_word_par = []
+    date_par = []
+    issn_par = []
+    authors = []
 
+    # DATE SELECT
+
+    flag_date = 0
+    if request_data.get('date_start') != "":
+        date_str = "article.date >= ?"
+        date_par.append(request_data.get('date_start'))
+        if request_data.get('date_end') != "":
+            date_str += "AND article.date <= ?"
+            date_par.append(request_data.get('date_end'))
+        flag_date = 1
+    elif request_data.get('date_end') != "":
+        date_str += "article.date <= ?"
+        date_par.append(request_data.get('date_end'))
+        flag_date = 1
+
+    # WORD IN TITLE SELECT
+
+    if len(request_data.get('cl_words')) > 0:
+
+        param_words_in_art = "article.title LIKE '%' || ? || '%'"
+        cl_word_par.append(request_data.get('cl_words')[0])
         if len(request_data.get('cl_words')) > 1:
             for i in range(1, len(request_data.get('cl_words'))):
                 param_words_in_art += " AND " + "article.title LIKE '%' || ? || '%'"
-                cl_word.append(request_data.get('cl_words')[i])
+                cl_word_par.append(request_data.get('cl_words')[i])
         # param_words_in_art = title LIKE %word1% AND title LIKE %word2% snd ...
-
+        if flag_date == 1:
+            param_words_in_art += " AND " + date_str
+    elif flag_date == 1:
+            param_words_in_art = date_str
     else:
-        param_words_in_art = '1'
+        param_words_in_art = "1"
 
-    if len(request_data.get('authors')) > 0:
-        authors = []
+    # ISSN SELECT
+
+    if request_data.get('issn') != "":
+        if param_words_in_art == "1":
+            param_words_in_art = "article.issn = ?"
+        else:
+            param_words_in_art += "AND article.issn LIKE '%' || ? || '%'"
+        issn_par.append(request_data.get('issn'))
+
+    # AUTHORS SELECT
+
+    if len(request_data.get('authors_family')) > 0:
         param_authors = "surnames LIKE '%' || ? || '%'"
-        authors.append(request_data.get('authors')[0])
+        authors.append(request_data.get('authors_family')[0])
 
-        if len(request_data.get('authors')) > 1:
-            for i in range(1, len(request_data.get('cl_words'))):
+        if len(request_data.get('authors_family')) > 1:
+            for i in range(1, len(request_data.get('authors_family'))):
                 param_authors += " AND " + "surnames LIKE '%' || ? || '%'"
-                authors.append(request_data.get('authors')[i])
+                authors.append(request_data.get('authors_family')[i])
         # param_authors = surnames LIKE %auth1% AND surnames LIKE  %auth2% snd ...
 
+        if len(request_data.get('authors_full_name')) > 0:
+            for i in range(1, len(request_data.get('authors_full_name'))):
+                param_authors += " AND " + "surnames LIKE '%' || ? || '%'"
+                authors.append(request_data.get('authors_full_name')[i])
+
+    elif len(request_data.get('authors_full_name')) > 0:
+        param_authors = "surnames LIKE '%' || ? || '%'"
+        authors.append(request_data.get('authors_full_name')[0])
+        if len(request_data.get('authors_full_name')) > 1:
+            for i in range(1, len(request_data.get('authors_full_name'))):
+                param_authors += " AND " + "surnames LIKE '%' || ? || '%'"
+                authors.append(request_data.get('authors_full_name')[i])
     else:
         param_authors = '1'
 
-    """How to conduct consistent environmental, economic, and social assessment during the building design process. A BIM-based Life Cycle Sustainability Assessment method HEEY
-RuBisCO from alfalfa – native subunits preservation through sodium sulfite addition and reduced solubility after acid precipitation followed by freeze-drying HEEY
-Antioxidant properties and digestion behaviors of polysaccharides from Chinese yam fermented by Saccharomyces boulardii HEEY
-Hydrodynamic cavitation (HC) degradation of tetracycline hydrochloride (TC) HEEY
-Selection of sensitive seeds for evaluation of compost maturity with the seed germination index HEEY"""
+
+    params = cl_word_par + date_par + issn_par + authors
+    print(params)
 
     database = Database()
     connection = database.create_connection(DATABASE_DIRSAVE)
     cursor = connection.cursor()
-    params = cl_word + authors
-    print(params)
+
     cursor.execute(""" SELECT title, surnames, doi, issn, date, address FROM
-                    (SELECT article.*, GROUP_CONCAT(DISTINCT author.surname) as surnames
+                    (SELECT article.*, GROUP_CONCAT(DISTINCT author.full_name) as surnames
                      FROM 
                         article LEFT JOIN auth_article 
                             ON article.id = auth_article.article_id
@@ -70,6 +116,7 @@ Selection of sensitive seeds for evaluation of compost maturity with the seed ge
                         GROUP BY article.id ) 
                 WHERE {second}
             """.format(first=param_words_in_art, second=param_authors), params)
+
     result = cursor.fetchall()
     print(len(result))
     print(result)

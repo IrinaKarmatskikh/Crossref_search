@@ -9,10 +9,12 @@ HEADERS = {
 }
 
 DATA = {
-    "doi"  : "some_doi",
-    "date_start"  : "some_date_st",
-    "cl_words"      : ["and"],
-    "authors"      : ["Wang"],
+    "issn"              : "",
+    "date_start"        : "2021-11-13",
+    "date_end"          : "",
+    "cl_words"          : ["and"],
+    "authors_family"    : [],
+    "authors_full_name" : ["Katarzyna Zienkiewicz"],
 }
 
 # R = requests.request("POST", URL_PATH, data=payload, headers=HEADERS)  # suggested by Postman
